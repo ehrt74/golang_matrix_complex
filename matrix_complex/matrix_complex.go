@@ -6,15 +6,19 @@ import (
 	"strings"
 )
 
-var wrongValueListLengthError error = errors.New("wrong value list length")
-var indexOutOfBoundsError error = errors.New("index out of bounds")
-var notSquareError error = errors.New("matrix not square")
-var determinantZeroError error = errors.New("determinant zero")
-var incompatibleMatrixSizesError error = errors.New("incompatible matrix sizes")
+var WrongValueListLengthError error = errors.New("wrong value list length")
+var IndexOutOfBoundsError error = errors.New("index out of bounds")
+var NotSquareError error = errors.New("matrix not square")
+var DeterminantZeroError error = errors.New("determinant zero")
+var IncompatibleMatrixSizesError error = errors.New("incompatible matrix sizes")
 
 type ComplexMatrix struct {
 	numrows, numcolumns int
 	vals []complex128
+}
+
+func (cm *ComplexMatrix)GetDimensions() (int, int) {
+	return cm.numrows, cm.numcolumns
 }
 
 func (cm *ComplexMatrix)String() string {
@@ -26,17 +30,23 @@ func (cm *ComplexMatrix)String() string {
 }
 
 // zero based. i is row, j is column
-func (cm *ComplexMatrix)GetAt(i, j int) (complex128, error) {
-	if err:=cm.checkBounds(i,j); err!=nil { return 0i, err }
-	return cm.getAt(i, j), nil
-}
-
-func (cm *ComplexMatrix)getAt(i, j int) complex128 {
+func (cm *ComplexMatrix)GetAt(i, j int) complex128 {
 	return cm.vals[i*cm.numcolumns + j]
 }
 
+func (cm *ComplexMatrix)SetAt(i,j int, c complex128) {
+	cm.vals[i*cm.numcolumns +j] = c
+}
+
+
+//NewComplexMatrix returns a complex matrix and an error.
+//If vals is nil, the matrix will be filled with 0i
+//If vals is not nil and has an incorrect length an error will be returned
 func NewComplexMatrix(numrows, numcolumns int, vals []complex128) (*ComplexMatrix, error) {
-	if numrows*numcolumns != len(vals) { return nil, wrongValueListLengthError }
+	if vals==nil {
+		vals = make([]complex128, numrows*numcolumns)
+	}
+	if numrows*numcolumns != len(vals) { return nil, WrongValueListLengthError }
 	return &ComplexMatrix{numrows:numrows, numcolumns:numcolumns, vals:vals}, nil
 }
 
@@ -56,7 +66,15 @@ func NewIdentity(numrows int) *ComplexMatrix {
 }
 
 func (cm *ComplexMatrix)checkBounds(i, j int) error {
-	if i>=cm.numrows || j>=cm.numcolumns || i<0 || j<0 { return indexOutOfBoundsError }
+	if i>=cm.numrows || j>=cm.numcolumns || i<0 || j<0 { return IndexOutOfBoundsError }
+	return nil
+}
+
+func (cm *ComplexMatrix)SetRow(i int, cm2 *ComplexMatrix) error {
+	if cm2.numrows != 1 || cm2.numcolumns!=cm.numcolumns { return IncompatibleMatrixSizesError }
+	for j:=0; j<cm.numcolumns; j++ {
+		cm.SetAt(i,j, cm2.GetAt(0,j))
+	}
 	return nil
 }
 
@@ -65,11 +83,19 @@ func (cm *ComplexMatrix)GetRow(i int) (*ComplexMatrix, error) {
 	return NewComplexMatrix(1, cm.numcolumns, cm.vals[i*cm.numcolumns:(i+1)*cm.numcolumns])
 }
 
+func (cm *ComplexMatrix)SetColumn(j int, cm2 *ComplexMatrix) error {
+	if cm2.numcolumns!=1 || cm2.numrows!=cm.numrows { return IncompatibleMatrixSizesError }
+	for i:=0; i<cm.numrows; i++ {
+		cm.SetAt(i,j, cm2.GetAt(i,0))
+	}
+	return nil
+}
+
 func (cm *ComplexMatrix)GetColumn(j int) (*ComplexMatrix, error) {
 	if err:=cm.checkBounds(0, j); err!=nil { return nil, err }
 	vals := make([]complex128, cm.numrows)
 	for i:=0; i<cm.numrows; i++ {
-		vals[i] = cm.getAt(i, j)
+		vals[i] = cm.GetAt(i, j)
 	}
 	return NewComplexMatrix(cm.numrows, 1, vals)
 }
@@ -81,7 +107,7 @@ func (cm *ComplexMatrix)GetSubMatrix(not_i, not_j int) (*ComplexMatrix, error) {
 	for i:=0; i<cm.numrows; i++ {
 		for j:=0; j<cm.numcolumns; j++ {
 			if i==not_i || j==not_j { continue }
-			vals = append(vals, cm.getAt(i, j))
+			vals = append(vals, cm.GetAt(i, j))
 		}
 	}
 	return NewComplexMatrix(cm.numrows-1, cm.numcolumns-1, vals)
@@ -95,7 +121,7 @@ func (cm *ComplexMatrix)Transpose() *ComplexMatrix {
 	vals := make([]complex128, 0, len(cm.vals))
 	for j:=0; j<cm.numcolumns; j++ {
 		for i:=0; i<cm.numrows; i++ {
-			vals=append(vals, cm.getAt(i, j))
+			vals=append(vals, cm.GetAt(i, j))
 		}
 	}
 	n, _ := NewComplexMatrix(cm.numcolumns, cm.numrows, vals)
@@ -103,8 +129,8 @@ func (cm *ComplexMatrix)Transpose() *ComplexMatrix {
 }
 
 func (cm *ComplexMatrix)GetDeterminant() (complex128, error) {
-	if !cm.isSquare() { return 0i, notSquareError }
-	if cm.numrows == 1 { return cm.getAt(0,0), nil }
+	if !cm.isSquare() { return 0i, NotSquareError }
+	if cm.numrows == 1 { return cm.GetAt(0,0), nil }
 	d := 0i
 	f := 1+0i
 	for i:=0; i<cm.numrows; i++ {
@@ -112,14 +138,14 @@ func (cm *ComplexMatrix)GetDeterminant() (complex128, error) {
 		if err != nil { return 0i, err }
 		d2, err := sm.GetDeterminant()
 		if err != nil { return 0i, err }
-		d += f * cm.getAt(i, 0) * d2
+		d += f * cm.GetAt(i, 0) * d2
 		f = complex(-real(f), 0)
 	}
 	return d, nil
 }
 
 func (cm *ComplexMatrix)GetCofactor() (*ComplexMatrix, error) {
-	if !cm.isSquare() { return nil, notSquareError }
+	if !cm.isSquare() { return nil, NotSquareError }
 	vals := make([]complex128, cm.numrows * cm.numcolumns)
 	f := 1+0i
 	for i := 0; i<cm.numrows; i++ {
@@ -129,7 +155,7 @@ func (cm *ComplexMatrix)GetCofactor() (*ComplexMatrix, error) {
 			if err!=nil { return nil, err }
 			d, err := sm.GetDeterminant()
 			if err!=nil { return nil, err }
-			vals[i*cm.numcolumns + j] = f * cm.getAt(i,j) * d
+			vals[i*cm.numcolumns + j] = f * d //= f * cm.GetAt(i,j) * d
 			f = complex(-real(f), 0)
 		}
 	}
@@ -152,13 +178,13 @@ func (cm *ComplexMatrix)Scale(s complex128) *ComplexMatrix {
 }
 
 func (cm *ComplexMatrix)Inverse() (*ComplexMatrix, error) {
-	if !cm.isSquare() { return nil, notSquareError }
-	if cm.numrows==1 { return NewComplexMatrix(1,1, []complex128{(1+0i)/cm.getAt(0,0)}) }
+	if !cm.isSquare() { return nil, NotSquareError }
+	if cm.numrows==1 { return NewComplexMatrix(1,1, []complex128{(1+0i)/cm.GetAt(0,0)}) }
 	adj, err := cm.GetAdjugate()
 	if err != nil { return nil, err }
 	d, err := cm.GetDeterminant()
 	if err != nil { return nil, err }
-	if d==0i { return nil, determinantZeroError }
+	if d==0i { return nil, DeterminantZeroError }
 	return adj.Scale(complex(1,0)/d), nil
 }
 
@@ -172,7 +198,7 @@ func (cm *ComplexMatrix)Equals(o *ComplexMatrix) bool {
 }
 
 func (cm *ComplexMatrix)Times(o *ComplexMatrix) (*ComplexMatrix, error) {
-	if cm.numcolumns != o.numrows { return nil, incompatibleMatrixSizesError }
+	if cm.numcolumns != o.numrows { return nil, IncompatibleMatrixSizesError }
 	retRows := cm.numrows
 	retColumns := o.numcolumns
 	vals := make([]complex128, retRows*retColumns)
@@ -184,7 +210,7 @@ func (cm *ComplexMatrix)Times(o *ComplexMatrix) (*ComplexMatrix, error) {
 			if err!=nil { return nil, err }
 			res := 0i
 			for n:=0; n<cm.numcolumns; n++ {
-				res += cm_row.getAt(0, n) * o_column.getAt(n, 0)
+				res += cm_row.GetAt(0, n) * o_column.GetAt(n, 0)
 			}
 			vals[cm_i*retRows + o_j]=res
 		}
